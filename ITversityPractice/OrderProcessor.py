@@ -1,6 +1,5 @@
 from pyspark import SparkConf, SparkContext
 
-
 def parseNames(line):
     fields = line.split(',')
 	 ## order_id -> (order_date, order_customer_id, order_status)
