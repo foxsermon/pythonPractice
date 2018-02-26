@@ -73,14 +73,17 @@ def orderDate(orderRDD):
 
 def orderDateByMonth(orderRDD):
 	# map by YYYY-MM -> reduceByKey
-	orderDate = orderRDD.map(lambda x : (parseDateByYearMonth(x[1][0]), 1)).reduceByKey(lambda x, y : x + y)
+	orderDate = orderRDD.map(lambda x : (parseDateByYearMonth(x[1][0]), 1))\
+								.reduceByKey(lambda x, y : x + y)
 
 	# for od in orderDate.sortByKey(False).collect():
 	#	print od
 	# print "---------------------------------------------------"
 
 	# map by (YYYY-MM, order_status) -> reduceByKey -> map (date, (order_status, counter))
-	orderDateStatus = orderRDD.map(lambda x : ((parseDateByYearMonth(x[1][0]), x[1][2]), 1)).reduceByKey(lambda x, y : x + y).map(lambda x : (x[0][0], (x[0][1], x[1])))
+	orderDateStatus = orderRDD.map(lambda x : ((parseDateByYearMonth(x[1][0]), x[1][2]), 1))\
+										.reduceByKey(lambda x, y : x + y)\
+										.map(lambda x : (x[0][0], (x[0][1], x[1])))
 
 	# for ods in orderDateStatus.sortByKey(False).collect():
 	# 	print ods
@@ -107,10 +110,13 @@ def orderDateByMonth(orderRDD):
 
 def orderDateByYear(orderRDD):
 	# map by YYYY -> reduceByKey
-	orderDate = orderRDD.map(lambda x : (parseDateByYear(x[1][0]) , 1)).reduceByKey(lambda x, y : x + y)
+	orderDate = orderRDD.map(lambda x : (parseDateByYear(x[1][0]) , 1))\
+								.reduceByKey(lambda x, y : x + y)
 
 	# map by (YYYY, order_status) -> reduceByKey -> map (date, (order_status, counter))
-	orderDateStatus = orderRDD.map(lambda x : ((parseDateByYear(x[1][0]), x[1][2]), 1)).reduceByKey(lambda x, y : x + y).map(lambda x : (x[0][0], (x[0][1], x[1])))
+	orderDateStatus = orderRDD.map(lambda x : ((parseDateByYear(x[1][0]), x[1][2]), 1))\
+										.reduceByKey(lambda x, y : x + y)\
+										.map(lambda x : (x[0][0], (x[0][1], x[1])))
 
 	orderJoin = orderDate.join(orderDateStatus)
 
@@ -123,7 +129,10 @@ def orderDateByYear(orderRDD):
 		print "\t\t {0:20} \t {1}".format(oj[1][1][0], oj[1][1][1])
 	'''
 
-	orderJoin.groupByKey().sortByKey(False).mapValues(list).foreach(printReportByYearSortedByStatus)
+	orderJoin.groupByKey()\
+				.sortByKey(False)\
+				.mapValues(list)\
+				.foreach(printReportByYearSortedByStatus)
 
 	print "---------------------------------------------------"
 
@@ -135,7 +144,7 @@ def orderDateByYear(orderRDD):
 conf = SparkConf().setAppName("OrderProcessor").setMaster("local")
 sc = SparkContext(conf = conf)
 
-orders = sc.textFile("/Users/serranm1/temp/miGIT/pythonPractice/datos/orders.txt")
+orders = sc.textFile("/Users/serranm1/temp/miGIT/CCA-175/dataPractice/orders.txt")
 
 orderRDD = orders.map(parseNames)
 
