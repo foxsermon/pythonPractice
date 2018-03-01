@@ -1,6 +1,19 @@
 from pyspark import SparkConf, SparkContext, SQLContext
 from pyspark.sql import functions as func
 import datetime as dt
+
+def initValue(x):
+	items = list()
+	items.append(x[1])
+	return (x[0], items)
+
+def mergeValue(x, y):
+	x[1].append(y[1])
+	return (x[0] + y[0], x[1])
+
+def mergeCombiner(x, y):
+	x[1].append(y[1])
+	return (x[0] + y[0], x[1])
 #
 # http://apache-spark-user-list.1001560.n3.nabble.com/How-to-add-jars-to-standalone-pyspark-program-td22685.html
 #
@@ -20,6 +33,7 @@ orderItems = sqlContext.read.format("com.databricks.spark.avro")\
 
 orderJoin = orders.join(orderItems, orders["order_id"] == orderItems["order_item_order_id"])
 
+
 print dt.date.fromtimestamp(1375070400000/1000).strftime('%Y-%m-%d')
 
 orderJoin.groupBy(func.to_date(func.from_unixtime(func.col("order_date") / 1000)).alias("order_date"), "order_status")\
@@ -37,16 +51,17 @@ sqlResult.show()
 
 print "-----------------------------------------------------------------------------------------------------------------"
 
-comByKeyResult = orderJoin.map(lambda x : ( (str(x[1]), str(x[3])), (float(str(x[8])), str(x[0])) ) )\
-									.combineByKey(
-														lambda x : (x[1], set(x[2])),
-														lambda (x, y) : (x[1] + y[1], x[2] + y[2]),
-														lambda (x, y) : (x[1] + y[1], x[2] ++ y[2])
-													  ).map(lambda x : (x[1][1], x[1][2], x[2][1], x[2][2].size))\
-														.toDF().orderBy(func.desc(func.col("_1")), func.col("_2"), func.desc(func.col("_3")), func.col("_4"))
-comByKeyResult.show()
-
-
+## map( (order_date, order_status), (price, order_id) )
+orderJoin.rdd.map(lambda x : ((str(x[1]), str(x[3])), (float(str(x[8])), str(x[0])))) \
+		  .combineByKey(
+										initValue,
+										mergeValue,
+										mergeCombiner
+									) \
+		  .map(lambda x : (x[0][0], x[0][1], x[1][0], len(x[1][1])) ) \
+		  .toDF() \
+		  .orderBy(func.desc("_1"), func.col("_2"), func.desc("_3"), func.col("_4")) \
+	     .show()
 
 '''
 var comByKeyResult = 
