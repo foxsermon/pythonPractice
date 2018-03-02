@@ -16,10 +16,12 @@ def mergeCombiner(x, y):
 	return (x[0] + y[0], x[1])
 #
 # http://apache-spark-user-list.1001560.n3.nabble.com/How-to-add-jars-to-standalone-pyspark-program-td22685.html
+# http://alvincjin.blogspot.com/2015/03/spark-overwrite-csv-file.html
 #
 
-conf = SparkConf().setAppName("OrderProcessor").setMaster("local")\
-						.set("spark.jars", "/Users/serranm1/apps/spark-2.0.0-bin-hadoop2.7/jars/spark-avro_2.11-4.0.0.jar")
+conf = SparkConf().setAppName("OrderProcessor").setMaster("local") \
+						.set("spark.jars", "/Users/serranm1/apps/spark-2.0.0-bin-hadoop2.7/jars/spark-avro_2.11-4.0.0.jar") \
+						.set("spark.hadoop.validateOutputSpecs", "false")
 
 sc = SparkContext(conf = conf)
 
@@ -36,9 +38,11 @@ orderJoin = orders.join(orderItems, orders["order_id"] == orderItems["order_item
 
 print dt.date.fromtimestamp(1375070400000/1000).strftime('%Y-%m-%d')
 
-orderJoin.groupBy(func.to_date(func.from_unixtime(func.col("order_date") / 1000)).alias("order_date"), "order_status")\
+dataFrameResult = orderJoin.groupBy(func.to_date(func.from_unixtime(func.col("order_date") / 1000)).alias("order_date"), "order_status")\
 			.agg(func.sum("order_item_subtotal").alias("total_amount"), func.countDistinct("order_id").alias("total_orders"))\
-			.orderBy(func.desc("order_date"), "order_status", func.desc("total_amount"), "total_orders").show()
+			.orderBy(func.desc("order_date"), "order_status", func.desc("total_amount"), "total_orders")
+
+dataFrameResult.show()
 
 print "-----------------------------------------------------------------------------------------------------------------"
 orderJoin.registerTempTable("order_joined");
@@ -52,7 +56,7 @@ sqlResult.show()
 print "-----------------------------------------------------------------------------------------------------------------"
 
 ## map( (order_date, order_status), (price, order_id) )
-orderJoin.rdd.map(lambda x : ((str(x[1]), str(x[3])), (float(str(x[8])), str(x[0])))) \
+combByKeyResult = orderJoin.rdd.map(lambda x : ((str(x[1]), str(x[3])), (float(str(x[8])), str(x[0])))) \
 		  .combineByKey(
 										initValue,
 										mergeValue,
@@ -60,8 +64,34 @@ orderJoin.rdd.map(lambda x : ((str(x[1]), str(x[3])), (float(str(x[8])), str(x[0
 									) \
 		  .map(lambda x : (x[0][0], x[0][1], x[1][0], len(x[1][1])) ) \
 		  .toDF() \
-		  .orderBy(func.desc("_1"), func.col("_2"), func.desc("_3"), func.col("_4")) \
-	     .show()
+		  .orderBy(func.desc("_1"), func.col("_2"), func.desc("_3"), func.col("_4"))
+
+combByKeyResult.show()
+
+print "-----------------------------------------------------------------------------------------------------------------"
+print "Save result as CVS"
+
+dataFrameResult.rdd.coalesce(1, True).map(lambda x: str(x[0]) + "," + str(x[1]) + "," + str(x[2]) + "," + str(x[3])).saveAsTextFile("dataFrameResult.cvs")
+sqlResult.rdd.coalesce(1, True).map(lambda x: str(x[0]) + "," + str(x[1]) + "," + str(x[2]) + "," + str(x[3])).saveAsTextFile("sqlResult.cvs")
+combByKeyResult.rdd.coalesce(1, True).map(lambda x : str(x[0]) + "," + str(x[1]) + "," + str(x[2]) + "," + str(x[3])).saveAsTextFile("combByKeyResult.cvs")
+
+print "-----------------------------------------------------------------------------------------------------------------"
+print "Compress result as GZIP"
+
+sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
+dataFrameResult.coalesce(1).write.mode("overwrite").parquet("dataFrameResult.gzip")
+sqlResult.coalesce(1).write.mode("overwrite").parquet("sqlResult.gzip")
+combByKeyResult.coalesce(1).write.mode("overwrite").parquet("combByKeyResult.gzip")
+
+print "-----------------------------------------------------------------------------------------------------------------"
+print "Compress result as SNAPPY"
+sqlContext.setConf("spark.sql.parquet.compression.codec", "snappy")
+dataFrameResult.coalesce(1).write.mode("overwrite").parquet("dataFrameResult-snappy")
+sqlResult.coalesce(1).write.mode("overwrite").parquet("sqlResult-snappy")
+combByKeyResult.coalesce(1).write.mode("overwrite").parquet("combByKeyResult-snappy")
+
+print "-----------------------------------------------------------------------------------------------------------------"
+
 
 '''
 var comByKeyResult = 
